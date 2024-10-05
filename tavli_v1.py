@@ -17,19 +17,21 @@ my_color = (71, 40, 21)
 
 # placement variables
 puck_size = 56
-col1_x = 870
-col7_x = 425
+col1_x = 868
+col7_x = 423
 low_y = 686
 high_y = 28
 col_dist = 64.5
+col_width = 56
+col_height = 271
 
 # variables for roll buttons
-bwidth = 120 # = Button Width
-bheight = 45 # = Button Height
-wxpos = 150 # = White X Position
-wypos = 800 # = White Y Position
-bxpos = 550 # = Black X Position
-bypos = 800 # = Black Y Position
+bwidth = 140 # = Button Width
+bheight = 50 # = Button Height
+# wxpos = 150 # = White X Position
+# wypos = 800 # = White Y Position
+bxpos = 80 # = Black X Position
+bypos = 780 # = Black Y Position
 
 # dice
 class Dice:
@@ -38,11 +40,13 @@ class Dice:
         d2 = 0
         d3 = 0
         d4 = 0
+        doubles = None
 
 # gamemode: 1 = 2d4, 2 = 1d4,1d8, 3 = 2d8
 # d1, d2 are the normal dice, d3, d4 are reserved for doubles
 gamemode = None
 dice = Dice()
+moves = []
 
 # for positioning the pucks
 def position(x, y):
@@ -77,10 +81,13 @@ def roll(dice):
         dice.d1 = random.randint(1, 6)
         dice.d2 = random.randint(1, 6)
     # check for doubles
+    # dice.d1 = dice.d2 #debug
     if dice.d1 == dice.d2:
+        dice.doubles = True
         dice.d3 = dice.d1
         dice.d4 = dice.d1
     else: 
+        dice.doubles = False
         dice.d3 = 0
         dice.d4 = 0
 
@@ -90,6 +97,7 @@ def roll(dice):
 class puck:
     def __init__(self, color):
         self.color = color
+        self.hit = False
         # get image
         if self.color == "white":
             self.image = pg.image.load("img/white_puck.png")
@@ -112,8 +120,7 @@ class puck:
                 self.x_coord = col1_x - (24-col) * col_dist
             else:
                 self.x_coord = col7_x - (18-col) * col_dist
-        print(col, self.color, self.x_coord, self.y_coord) #debug
-
+        # print(col, self.color, self.x_coord, self.y_coord) #debug
 
 # array of white pucks
 whites = [
@@ -131,15 +138,18 @@ blacks = [
 
 # for column stack class
 class column:
-    def __init__(self, number):
+    def __init__(self, number, xpos, ypos):
         self.pucks = []
         self.number = number
         self.color = None
         self.size = 0
+        self.xpos = xpos
+        self.ypos = ypos
 
     def remove_piece(self): #poping
         if len(self.pucks) > 0:
-            self.pucks.pop()
+            self.size -= 1
+            return self.pucks.pop()
 
     def add_piece(self, piece_to_add): #pushing
         self.color = piece_to_add.color
@@ -152,15 +162,144 @@ class column:
 def move(FROM, TO):
     pg.mixer.Sound.play(move_sound)
     pg.mixer.Sound.play(move_sound)
-    #first poping from current stack
+    #first poping from active_col stack
     TO.add_piece(FROM.remove_piece())
 
+d1ok = False
+d2ok = False
+
+def legal_moves(col):
+    # clear list
+    moves.clear()
+    # moves.append(col)
+    if not turn_over():
+        moves.append(col)
+        if current_turn == "white":
+            legal_moves_white()
+        else:
+            legal_moves_black()
+
+def legal_moves_white():
+    # color of curernt column 
+    curr_color = columns[moves[0]-1].color
+    if curr_color == "white" and dice.d1+dice.d2+dice.d3+dice.d4 > 0:
+        # for doubles
+        if dice.doubles:
+            if moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + dice.d1].color or 0 <= columns[moves[0]-1 + dice.d1].size <= 1):
+                moves.append(columns[moves[0]-1 + dice.d1])
+                d1ok = True
+            else: d1ok = False
+            if dice.d2 > 0 and moves[0] + 2*dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + 2*dice.d1].color or 0 <= columns[moves[0]-1 + 2*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0]-1 + 2*dice.d1])
+            if dice.d3 > 0 and moves[0] + 3*dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + 3*dice.d1].color or 0 <= columns[moves[0]-1 + 3*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0]-1 + 3*dice.d1])
+            if dice.d4 > 0 and moves[0] + 4*dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + 4*dice.d1].color or 0 <= columns[moves[0]-1 + 4*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0]-1 + 4*dice.d1])
+        else:
+            #  not out of bounds              if source color = destination color                  or destination is empty or has 1 puck                       
+            if dice.d1 > 0 and moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + dice.d1].color or 0 <= columns[moves[0]-1 + dice.d1].size <= 1):
+                moves.append(columns[moves[0]-1 + dice.d1])
+                d1ok = True
+            else: d1ok = False
+            # same for d2
+            if dice.d2 > 0 and moves[0] + dice.d2 <= 24 and (curr_color == columns[moves[0]-1 + dice.d2].color or 0 <= columns[moves[0]-1 + dice.d2].size <= 1):
+                moves.append(columns[moves[0]-1 + dice.d2])
+                d2ok = True
+            else: d2ok = False
+            # same for d1+d2
+            if dice.d1 > 0 and dice.d2 > 0 and moves[0] + dice.d1 + dice.d2 <= 24 and (curr_color == columns[moves[0]-1 + dice.d1 + dice.d2].color or 0 <= columns[moves[0]-1 + dice.d1 + dice.d2].size <= 1) and (d1ok or d2ok):
+                moves.append(columns[moves[0]-1 + dice.d1 + dice.d2])
+        
+def legal_moves_black():
+    # color of curernt column 
+    curr_color = columns[moves[0]-1].color
+    if curr_color == "black" and dice.d1+dice.d2+dice.d3+dice.d4 > 0:
+        # same for doubles
+        if dice.doubles:
+            if 1 <= moves[0] - dice.d1 and (curr_color == columns[moves[0]-1 - dice.d1].color or 0 <= columns[moves[0]-1 - dice.d1].size <= 1):
+                moves.append(columns[moves[0]-1 - dice.d1])
+                d1ok = True
+            else: d1ok = False
+            if dice.d2 > 0 and 1 <= moves[0] - 2*dice.d1 and (curr_color == columns[moves[0]-1 - 2*dice.d1].color or 0 <= columns[moves[0]-1 - 2*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0]-1 - 2*dice.d1])
+            if dice.d3 > 0 and 1 <= moves[0] - 3*dice.d1 and (curr_color == columns[moves[0]-1 - 3*dice.d1].color or 0 <= columns[moves[0]-1 - 3*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0]-1 - 3*dice.d1])
+            if dice.d4 > 0 and 1 <= moves[0] - 4*dice.d1 and (curr_color == columns[moves[0]-1 - 4*dice.d1].color or 0 <= columns[moves[0]-1 - 4*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0]-1 - 4*dice.d1])
+        else:
+            #  not out of bounds         and source color = destination color                     or destination is empty or has 1 puck                       
+            if dice.d1 > 0 and 1 <= moves[0] - dice.d1 and (curr_color == columns[moves[0]-1 - dice.d1].color or 0 <= columns[moves[0]-1 - dice.d1].size <= 1):
+                moves.append(columns[moves[0]-1 - dice.d1])
+                d1ok = True
+            else: d1ok = False
+            # same for d2
+            if dice.d2 > 0 and 1 <= moves[0] - dice.d2 and (curr_color == columns[moves[0]-1 - dice.d2].color or 0 <= columns[moves[0]-1 - dice.d2].size <= 1):
+                moves.append(columns[moves[0]-1 - dice.d2])
+                d2ok = True
+            else: d2ok = False
+            # same for d1+d2
+            if dice.d1 > 0 and dice.d2 > 0 and 1 <= moves[0] - dice.d1 - dice.d2 and (curr_color == columns[moves[0]-1 - (dice.d1 + dice.d2)].color or 0 <= columns[moves[0]-1 - (dice.d1 + dice.d2)].size <= 1) and (d1ok or d2ok):
+                moves.append(columns[moves[0]-1 - (dice.d1 + dice.d2)])
+
+def update_moves(dist):
+    distance = []
+    index = 0
+    if not dice.doubles:
+        if dist == dice.d1:
+            dice.d1 = 0
+        elif dist == dice.d2:
+            dice.d2 = 0
+        else:
+            dice.d1 = dice.d2 = 0
+    else:
+        cnt = (dist/dice.d1)
+        sum = dice.d1 + dice.d2 + dice.d3 + dice.d4
+        if cnt == 4:
+            dice.d1 = dice.d2 = dice.d3 = dice.d4 = 0
+        elif cnt == 3 and sum == 4*dice.d1:
+            dice.d2 = dice.d3 = dice.d4 = 0
+        elif cnt == 3 and sum == 3*dice.d1:
+            dice.d1 = dice.d2 = dice.d3 = 0
+        elif cnt == 2 and sum == 4*dice.d1:
+            dice.d3 = dice.d4 = 0
+        elif cnt == 2 and sum == 3*dice.d1:
+            dice.d2 = dice.d3 = 0
+        elif cnt == 2 and sum == 2*dice.d1:
+            dice.d1 = dice.d2 = 0    
+        elif cnt == 1 and sum == 4*dice.d1:
+            dice.d4 = 0
+        elif cnt == 1 and sum == 3*dice.d1:
+            dice.d3 = 0
+        elif cnt == 1 and sum == 2*dice.d1:
+            dice.d2 = 0
+        else: 
+            dice.d1 = 0
+
+            
+    print(dice.d1, dice.d2, dice.d3, dice.d4) #debug
+    legal_moves(moves[0])
+
+def show_moves():
+    for j in moves[1:]:
+        if 1<=j.number<=12:
+            screen.blit(highlight_col_bot, (j.xpos, j.ypos))
+        else:
+            screen.blit(highlight_col_top, (j.xpos, j.ypos))
+
+def turn_over():
+    if dice.d1 == dice.d2 == dice.d3 == dice.d4 == 0:
+        return True
+    else:
+        return False
+
 # columns array 
+bot_light_y = 415
+top_light_y = 60 
 columns = [
-    column(1), column(2), column(3), column(4), column(5), column(6),
-    column(7), column(8), column(9), column(10), column(11), column(12),
-    column(13), column(14), column(15), column(16), column(17), column(18),
-    column(19), column(20), column(21), column(22), column(23), column(24) 
+    column(1, col1_x, bot_light_y), column(2, col1_x-(col_width+8.5), bot_light_y), column(3, col1_x-2*(col_width+8.5), bot_light_y), column(4, col1_x-3*(col_width+8.5), bot_light_y), column(5, col1_x-4*(col_width+8.5), bot_light_y), column(6, col1_x-5*(col_width+8.5), bot_light_y),
+    column(7, col7_x, bot_light_y), column(8, col7_x-(col_width+8.5), bot_light_y), column(9, col7_x-2*(col_width+8.5), bot_light_y), column(10, col7_x-3*(col_width+8.5), bot_light_y), column(11, col7_x-4*(col_width+8.5), bot_light_y), column(12, col7_x-5*(col_width+8.5), bot_light_y),
+    column(13, col7_x-5*(col_width+8.5), top_light_y), column(14, col7_x-4*(col_width+8.5), top_light_y), column(15, col7_x-3*(col_width+8.5), top_light_y), column(16, col7_x-2*(col_width+8.5), top_light_y), column(17, col7_x-(col_width+8.5), top_light_y), column(18, col7_x, top_light_y),
+    column(19, col1_x-5*(col_width+8.5), top_light_y), column(20, col1_x-4*(col_width+8.5), top_light_y), column(21, col1_x-3*(col_width+8.5), top_light_y), column(22, col1_x-2*(col_width+8.5), top_light_y), column(23, col1_x-(col_width+8.5), top_light_y), column(24, col1_x, top_light_y) 
 ]
 
 # initialize columns with pucks
@@ -176,8 +315,17 @@ columns[23].add_piece(blacks[13]); columns[23].add_piece(blacks[14])
 # various flags and vars
 running = True
 current_turn = None
+end_of_turn = True
+show_moves_flag = False
+active_col = None
+prev_col = None
+active_puck = None
 
 # images
+roll_button = pg.image.load("img/roll_b_inactive.png")
+active_roll_button = pg.image.load("img/roll_b_active.png")
+highlight_col_bot = pg.image.load("img/col_light_bot.png")
+highlight_col_top = pg.image.load("img/col_light_top.png")
 
 # messages
 info = font.render("Playing: ", True, (0,255,255))
@@ -202,6 +350,7 @@ while running:
             current_turn = "black"
         elif dice.d2 > dice.d1:
             current_turn = "white"
+        dice.d1 = dice.d2 = 0
     
     # set background
     screen.fill((0,0,0))
@@ -219,6 +368,74 @@ while running:
         screen.blit(i.image, (i.x_coord, i.y_coord))
     for i in blacks:
         screen.blit(i.image, (i.x_coord, i.y_coord))
+
+    # screen.blit(roll_button, (bxpos,bypos))
+
+    # if end_of_turn == True:
+    if turn_over():
+        # change roll button on hover
+        if (bxpos <= mouse[0] <= bxpos + bwidth) and (bypos <= mouse[1] <= bypos + bheight):
+            screen.blit(active_roll_button, (bxpos,bypos))
+            # roll on clikc and start new turn
+            if click[0] == 1:
+                # end_of_turn = False
+                roll(dice)
+                print(dice.d1, dice.d2, dice.d3, dice.d4) #debug
+                moves.clear
+                moves.append(0)
+        else:
+            screen.blit(roll_button, (bxpos, bypos))
+
+    # a player is playing
+    else:
+        # listen for mouse click on column to show available moves
+        if event.type == pg.MOUSEBUTTONDOWN:# and not show_moves_flag:
+            pg.time.wait(100)
+            for i in columns:
+                if (i.xpos <= mouse[0] <= i.xpos+col_width) and (i.ypos <= mouse[1] <= i.ypos+col_height):
+                    active_col = i.number 
+
+                    if show_moves_flag and active_col == moves[0]:
+                        show_moves_flag = False
+                    elif not show_moves_flag and active_col == moves[0]:
+                        show_moves_flag = True
+                    else:                        
+                        # check if player clicked a valid move fromm the moves list
+                        if show_moves_flag and len(moves) > 1:
+                            for j in moves[1:]:
+                                if j.xpos <= mouse[0] <= j.xpos + col_width and j.ypos <= mouse[1] <= j.ypos + col_height:
+                                    move(columns[moves[0]-1], columns[j.number-1])
+                                    print(abs(moves[0]-j.number))
+                                    update_moves(abs(moves[0]-j.number))
+                                    
+                        legal_moves(active_col)            
+                        show_moves_flag = True
+
+        if show_moves_flag and not turn_over():
+            show_moves()    
+        # change player turn
+        if turn_over() and current_turn == "white":
+            current_turn = "black"
+            print("turn over")
+        elif turn_over() and current_turn == "black":
+            current_turn = "white"
+            print("turn over")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     pg.display.update()
     
