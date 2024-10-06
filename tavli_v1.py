@@ -33,6 +33,24 @@ bheight = 50 # = Button Height
 bxpos = 80 # = Black X Position
 bypos = 780 # = Black Y Position
 
+# various flags and vars
+running = True
+current_turn = None # specifies current turn as "white" or "black"
+end_of_turn = True  # flag to signify end of turn
+show_moves_flag = False # flag to turn on or off available moves indicator
+active_col = None   # variable specifying selected column
+active_puck = None  # variable specifying selected puck
+home_white = False  # flag checking if whites can be collected
+home_black = False  # flag checking if blacks can be collected
+collected_white = 0 # counter for collected white pucks
+collected_black = 0 # counter for collected black pucks
+
+# images
+roll_button = pg.image.load("img/roll_b_inactive.png")
+active_roll_button = pg.image.load("img/roll_b_active.png")
+highlight_col_bot = pg.image.load("img/col_light_bot.png")
+highlight_col_top = pg.image.load("img/col_light_top.png")
+
 # dice
 class Dice:
     def __init__(self):
@@ -106,17 +124,23 @@ class puck:
 
     def get_coords(self, col, sz):    
         # get y
-        if 1 <= col <= 12:
+        if 0 <= col <= 12:
             self.y_coord = low_y - sz * puck_size
             # get x
-            if 1 <= col <= 6:
+            if col == 0:
+                self.x_coord = black_mid.xpos
+                self.y_coord = black_mid.ypos + sz * puck_size
+            elif 1 <= col <= 6:
                 self.x_coord = col1_x - (col-1) * col_dist
             else:
                 self.x_coord = col7_x - (col-7) * col_dist
         else: 
             self.y_coord = high_y + sz * puck_size
             # get x
-            if 19 <= col <= 24:
+            if col == 25:
+                self.x_coord = white_mid.xpos
+                self.y_coord = white_mid.ypos - sz * puck_size
+            elif 19 <= col <= 24:
                 self.x_coord = col1_x - (24-col) * col_dist
             else:
                 self.x_coord = col7_x - (18-col) * col_dist
@@ -149,6 +173,8 @@ class column:
     def remove_piece(self): #poping
         if len(self.pucks) > 0:
             self.size -= 1
+            if self.size == 0:
+                self.color == None
             return self.pucks.pop()
 
     def add_piece(self, piece_to_add): #pushing
@@ -158,11 +184,21 @@ class column:
         piece_to_add.get_coords(self.number, self.size)
         self.size += 1
 
+white_mid = column(25, 485, 322)
+black_mid = column(0, 485, 398)
+
 # to move piece (from and to refer to columns)
 def move(FROM, TO):
     pg.mixer.Sound.play(move_sound)
     pg.mixer.Sound.play(move_sound)
-    #first poping from active_col stack
+    # check if a puck is hit
+    if TO.color != None and TO.color != FROM.color:
+        # move to corresponding middle
+        if current_turn == "white":
+            move(TO, black_mid)
+        else:
+            move(TO, white_mid)
+    # perform original move
     TO.add_piece(FROM.remove_piece())
 
 d1ok = False
@@ -292,6 +328,43 @@ def turn_over():
     else:
         return False
 
+def home_check():
+    sum_w = sum_b = 0
+    if gamemode == None or gamemode == 1:
+        # check whites
+        for w in columns[17:]: # get columns 17-23
+            if w.color == "white":
+                sum_w += w.size
+        if sum_w + collected_white == 15:
+            home_white = True
+        else: 
+            home_white = False
+        # check blacks
+        for b in columns[:6]: # get columns 0-5
+            if b.color == "black":
+                sum_w += b.size
+        if sum_b + collected_black == 15:
+            home_black = True
+        else: 
+            home_black = False
+    else:
+        # check whites
+        for w in columns[15:]: # get columns 15-23
+            if w.color == "white":
+                sum_w += w.size
+        if sum_w + collected_white == 15:
+            home_white = True
+        else: 
+            home_white = False
+        # check blacks
+        for b in columns[:8]: # get columns 0-7
+            if b.color == "black":
+                sum_w += b.size
+        if sum_b + collected_black == 15:
+            home_black = True
+        else: 
+            home_black = False
+
 # columns array 
 bot_light_y = 415
 top_light_y = 60 
@@ -311,21 +384,6 @@ columns[12].add_piece(blacks[8]); columns[12].add_piece(blacks[9]); columns[12].
 columns[16].add_piece(whites[7]); columns[16].add_piece(whites[8]); columns[16].add_piece(whites[9])
 columns[18].add_piece(whites[10]); columns[18].add_piece(whites[11]); columns[18].add_piece(whites[12]); columns[18].add_piece(whites[13]); columns[18].add_piece(whites[14])
 columns[23].add_piece(blacks[13]); columns[23].add_piece(blacks[14])
-
-# various flags and vars
-running = True
-current_turn = None
-end_of_turn = True
-show_moves_flag = False
-active_col = None
-prev_col = None
-active_puck = None
-
-# images
-roll_button = pg.image.load("img/roll_b_inactive.png")
-active_roll_button = pg.image.load("img/roll_b_active.png")
-highlight_col_bot = pg.image.load("img/col_light_bot.png")
-highlight_col_top = pg.image.load("img/col_light_top.png")
 
 # messages
 info = font.render("Playing: ", True, (0,255,255))
