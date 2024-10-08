@@ -38,6 +38,7 @@ running = True
 current_turn = None # specifies current turn as "white" or "black"
 end_of_turn = True  # flag to signify end of turn
 show_moves_flag = False # flag to turn on or off available moves indicator
+# moved = False
 active_col = None   # variable specifying selected column
 active_puck = None  # variable specifying selected puck
 home_white = False  # flag checking if whites can be collected
@@ -48,6 +49,10 @@ collected_black = 0 # counter for collected black pucks
 # images
 roll_button = pg.image.load("img/roll_b_inactive.png")
 active_roll_button = pg.image.load("img/roll_b_active.png")
+w_puck = pg.image.load("img/white_puck.png")
+b_puck = pg.image.load("img/black_puck.png")
+selected_white_puck = pg.image.load("img/white_highlight.png")
+selected_black_puck = pg.image.load("img/black_highlight.png")
 highlight_col_bot = pg.image.load("img/col_light_bot.png")
 highlight_col_top = pg.image.load("img/col_light_top.png")
 
@@ -118,18 +123,18 @@ class puck:
         self.hit = False
         # get image
         if self.color == "white":
-            self.image = pg.image.load("img/white_puck.png")
+            self.image = w_puck
         else:
-            self.image = pg.image.load("img/black_puck.png")
+            self.image = b_puck
 
     def get_coords(self, col, sz):    
         # get y
-        if 0 <= col <= 12:
+        if 1 <= col <= 12 or col == 25:
             self.y_coord = low_y - sz * puck_size
             # get x
-            if col == 0:
-                self.x_coord = black_mid.xpos
-                self.y_coord = black_mid.ypos + sz * puck_size
+            if col == 25:
+                self.x_coord = columns[25].xpos
+                self.y_coord = columns[25].ypos + sz * puck_size
             elif 1 <= col <= 6:
                 self.x_coord = col1_x - (col-1) * col_dist
             else:
@@ -137,9 +142,9 @@ class puck:
         else: 
             self.y_coord = high_y + sz * puck_size
             # get x
-            if col == 25:
-                self.x_coord = white_mid.xpos
-                self.y_coord = white_mid.ypos - sz * puck_size
+            if col == 0:
+                self.x_coord = columns[0].xpos
+                self.y_coord = columns[0].ypos - sz * puck_size
             elif 19 <= col <= 24:
                 self.x_coord = col1_x - (24-col) * col_dist
             else:
@@ -184,8 +189,29 @@ class column:
         piece_to_add.get_coords(self.number, self.size)
         self.size += 1
 
-white_mid = column(25, 485, 322)
-black_mid = column(0, 485, 398)
+    def highlight_puck(self):
+        unhilight_pucks("w")
+        unhilight_pucks("b")
+        if not turn_over() and self.size > 0:
+            tpuck = self.remove_piece()
+            if tpuck.color == "white" == current_turn:
+                tpuck.image = selected_white_puck
+            elif tpuck.color == "black" == current_turn:
+                tpuck.image = selected_black_puck
+            self.add_piece(tpuck)
+
+def unhilight_pucks(color):
+    if color == "w":
+        for w in whites:
+            w.image = w_puck
+    elif color == "b":
+        for b in blacks:
+            b.image = b_puck
+    else:
+        for w in whites:
+            w.image = w_puck
+        for b in blacks:
+            b.image = b_puck
 
 # to move piece (from and to refer to columns)
 def move(FROM, TO):
@@ -195,91 +221,143 @@ def move(FROM, TO):
     if TO.color != None and TO.color != FROM.color:
         # move to corresponding middle
         if current_turn == "white":
-            move(TO, black_mid)
+            move(TO, columns[25])
         else:
-            move(TO, white_mid)
+            move(TO, columns[0])
     # perform original move
+    # tmp = FROM.remove_piece()
+    # TO.add_piece(tmp)
     TO.add_piece(FROM.remove_piece())
 
 d1ok = False
 d2ok = False
+d3ok = False
 
 def legal_moves(col):
     # clear list
     moves.clear()
     # moves.append(col)
-    if not turn_over():
+    if col == -1:
+        moves.append(-10)
+    elif not turn_over():
+        # moves[0] stores number of active column
         moves.append(col)
-        if current_turn == "white":
+        if current_turn == "white" and columns[0].size == 0:
             legal_moves_white()
-        else:
+        elif current_turn == "black" and columns[25].size == 0:
             legal_moves_black()
+        elif current_turn == "white" and columns[0].size > 0:
+            seat_white()
+        else:
+            seat_black()
+
+def seat_white():
+        # if dice.doubles:
+        #  if destination color is white       or destination is empty or has 1 puck
+        if dice.d1 > 0 and (columns[dice.d1].color == "white" or 0 <= columns[dice.d1].size <= 1):
+            moves.append(columns[dice.d1])
+            d1ok = True
+        else:
+            d1ok = False
+        # same for d2
+        if not dice.doubles and dice.d2 > 0 and (columns[dice.d2].color == "white" or 0 <= columns[dice.d2].size <= 1):
+            moves.append(columns[dice.d2])
+            d2ok = True
+        else:
+            d2ok = False
+        # end turn if no moves found
+        if not d1ok and not d2ok:
+            dice.d1 = dice.d2 = dice.d3 = dice.d4 = 0
+
+def seat_black():
+        # if dice.doubles:
+        #  if destination color is black       or destination is empty or has 1 puck
+        if dice.d1 > 0 and (columns[25-dice.d1].color == "black" or 0 <= columns[25-dice.d1].size <= 1):
+            moves.append(columns[25-dice.d1])
+            d1ok = True
+        else:
+            d1ok = False
+        # same for d2
+        if not dice.doubles and dice.d2 > 0 and (columns[25-dice.d2].color == "black" or 0 <= columns[25-dice.d2].size <= 1):
+            moves.append(columns[25-dice.d2])
+            d2ok = True
+        else:
+            d2ok = False
+        # end turn if no moves found
+        if not d1ok and not d2ok:
+            dice.d1 = dice.d2 = dice.d3 = dice.d4 = 0
 
 def legal_moves_white():
     # color of curernt column 
-    curr_color = columns[moves[0]-1].color
+    curr_color = columns[moves[0]].color
     if curr_color == "white" and dice.d1+dice.d2+dice.d3+dice.d4 > 0:
         # for doubles
         if dice.doubles:
-            if moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + dice.d1].color or 0 <= columns[moves[0]-1 + dice.d1].size <= 1):
-                moves.append(columns[moves[0]-1 + dice.d1])
+            if moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0] + dice.d1].color or 0 <= columns[moves[0] + dice.d1].size <= 1):
+                moves.append(columns[moves[0] + dice.d1])
                 d1ok = True
             else: d1ok = False
-            if dice.d2 > 0 and moves[0] + 2*dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + 2*dice.d1].color or 0 <= columns[moves[0]-1 + 2*dice.d1].size <= 1) and d1ok:
-                moves.append(columns[moves[0]-1 + 2*dice.d1])
-            if dice.d3 > 0 and moves[0] + 3*dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + 3*dice.d1].color or 0 <= columns[moves[0]-1 + 3*dice.d1].size <= 1) and d1ok:
-                moves.append(columns[moves[0]-1 + 3*dice.d1])
-            if dice.d4 > 0 and moves[0] + 4*dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + 4*dice.d1].color or 0 <= columns[moves[0]-1 + 4*dice.d1].size <= 1) and d1ok:
-                moves.append(columns[moves[0]-1 + 4*dice.d1])
+            if d1ok and dice.d2 > 0 and moves[0] + 2*dice.d1 <= 24 and (curr_color == columns[moves[0] + 2*dice.d1].color or 0 <= columns[moves[0] + 2*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0] + 2*dice.d1])
+                d2ok = True
+            else: d2ok = False
+            if d1ok and d2ok and dice.d3 > 0 and moves[0] + 3*dice.d1 <= 24 and (curr_color == columns[moves[0] + 3*dice.d1].color or 0 <= columns[moves[0] + 3*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0] + 3*dice.d1])
+                d3ok = True
+            else: d3ok = False
+            if d1ok and d2ok and d3ok and dice.d4 > 0 and moves[0] + 4*dice.d1 <= 24 and (curr_color == columns[moves[0] + 4*dice.d1].color or 0 <= columns[moves[0] + 4*dice.d1].size <= 1) and d1ok:
+                moves.append(columns[moves[0] + 4*dice.d1])
         else:
-            #  not out of bounds              if source color = destination color                  or destination is empty or has 1 puck                       
-            if dice.d1 > 0 and moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0]-1 + dice.d1].color or 0 <= columns[moves[0]-1 + dice.d1].size <= 1):
-                moves.append(columns[moves[0]-1 + dice.d1])
+            #  not out of bounds                         if source color = destination color                   or destination is empty or has 1 puck                       
+            if dice.d1 > 0 and moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0] + dice.d1].color or 0 <= columns[moves[0] + dice.d1].size <= 1):
+                moves.append(columns[moves[0] + dice.d1])
                 d1ok = True
             else: d1ok = False
             # same for d2
-            if dice.d2 > 0 and moves[0] + dice.d2 <= 24 and (curr_color == columns[moves[0]-1 + dice.d2].color or 0 <= columns[moves[0]-1 + dice.d2].size <= 1):
-                moves.append(columns[moves[0]-1 + dice.d2])
+            if dice.d2 > 0 and moves[0] + dice.d2 <= 24 and (curr_color == columns[moves[0] + dice.d2].color or 0 <= columns[moves[0] + dice.d2].size <= 1):
+                moves.append(columns[moves[0] + dice.d2])
                 d2ok = True
             else: d2ok = False
             # same for d1+d2
-            if dice.d1 > 0 and dice.d2 > 0 and moves[0] + dice.d1 + dice.d2 <= 24 and (curr_color == columns[moves[0]-1 + dice.d1 + dice.d2].color or 0 <= columns[moves[0]-1 + dice.d1 + dice.d2].size <= 1) and (d1ok or d2ok):
-                moves.append(columns[moves[0]-1 + dice.d1 + dice.d2])
+            if dice.d1 > 0 and dice.d2 > 0 and moves[0] + dice.d1 + dice.d2 <= 24 and (curr_color == columns[moves[0] + dice.d1 + dice.d2].color or 0 <= columns[moves[0] + dice.d1 + dice.d2].size <= 1) and (d1ok or d2ok):
+                moves.append(columns[moves[0] + dice.d1 + dice.d2])
         
 def legal_moves_black():
     # color of curernt column 
-    curr_color = columns[moves[0]-1].color
+    curr_color = columns[moves[0]].color
     if curr_color == "black" and dice.d1+dice.d2+dice.d3+dice.d4 > 0:
-        # same for doubles
+        # for doubles
         if dice.doubles:
-            if 1 <= moves[0] - dice.d1 and (curr_color == columns[moves[0]-1 - dice.d1].color or 0 <= columns[moves[0]-1 - dice.d1].size <= 1):
-                moves.append(columns[moves[0]-1 - dice.d1])
+            if 1 <= moves[0] - dice.d1 and (curr_color == columns[moves[0] - dice.d1].color or 0 <= columns[moves[0] - dice.d1].size <= 1):
+                moves.append(columns[moves[0] - dice.d1])
                 d1ok = True
             else: d1ok = False
-            if dice.d2 > 0 and 1 <= moves[0] - 2*dice.d1 and (curr_color == columns[moves[0]-1 - 2*dice.d1].color or 0 <= columns[moves[0]-1 - 2*dice.d1].size <= 1) and d1ok:
-                moves.append(columns[moves[0]-1 - 2*dice.d1])
-            if dice.d3 > 0 and 1 <= moves[0] - 3*dice.d1 and (curr_color == columns[moves[0]-1 - 3*dice.d1].color or 0 <= columns[moves[0]-1 - 3*dice.d1].size <= 1) and d1ok:
-                moves.append(columns[moves[0]-1 - 3*dice.d1])
-            if dice.d4 > 0 and 1 <= moves[0] - 4*dice.d1 and (curr_color == columns[moves[0]-1 - 4*dice.d1].color or 0 <= columns[moves[0]-1 - 4*dice.d1].size <= 1) and d1ok:
-                moves.append(columns[moves[0]-1 - 4*dice.d1])
+            if d1ok and dice.d2 > 0 and 1 <= moves[0] - 2*dice.d1 and (curr_color == columns[moves[0] - 2*dice.d1].color or 0 <= columns[moves[0] - 2*dice.d1].size <= 1):
+                moves.append(columns[moves[0] - 2*dice.d1])
+                d2ok = True
+            else: d2ok = False
+            if d1ok and d2ok and dice.d3 > 0 and 1 <= moves[0] - 3*dice.d1 and (curr_color == columns[moves[0] - 3*dice.d1].color or 0 <= columns[moves[0] - 3*dice.d1].size <= 1):
+                moves.append(columns[moves[0] - 3*dice.d1])
+                d3ok = True
+            else: d3ok = False
+            if d1ok and d2ok and d3ok and dice.d4 > 0 and 1 <= moves[0] - 4*dice.d1 and (curr_color == columns[moves[0] - 4*dice.d1].color or 0 <= columns[moves[0] - 4*dice.d1].size <= 1):
+                moves.append(columns[moves[0] - 4*dice.d1])
         else:
             #  not out of bounds         and source color = destination color                     or destination is empty or has 1 puck                       
-            if dice.d1 > 0 and 1 <= moves[0] - dice.d1 and (curr_color == columns[moves[0]-1 - dice.d1].color or 0 <= columns[moves[0]-1 - dice.d1].size <= 1):
-                moves.append(columns[moves[0]-1 - dice.d1])
+            if dice.d1 > 0 and 1 <= moves[0] - dice.d1 and (curr_color == columns[moves[0] - dice.d1].color or 0 <= columns[moves[0] - dice.d1].size <= 1):
+                moves.append(columns[moves[0] - dice.d1])
                 d1ok = True
             else: d1ok = False
             # same for d2
-            if dice.d2 > 0 and 1 <= moves[0] - dice.d2 and (curr_color == columns[moves[0]-1 - dice.d2].color or 0 <= columns[moves[0]-1 - dice.d2].size <= 1):
-                moves.append(columns[moves[0]-1 - dice.d2])
+            if dice.d2 > 0 and 1 <= moves[0] - dice.d2 and (curr_color == columns[moves[0] - dice.d2].color or 0 <= columns[moves[0] - dice.d2].size <= 1):
+                moves.append(columns[moves[0] - dice.d2])
                 d2ok = True
             else: d2ok = False
             # same for d1+d2
-            if dice.d1 > 0 and dice.d2 > 0 and 1 <= moves[0] - dice.d1 - dice.d2 and (curr_color == columns[moves[0]-1 - (dice.d1 + dice.d2)].color or 0 <= columns[moves[0]-1 - (dice.d1 + dice.d2)].size <= 1) and (d1ok or d2ok):
-                moves.append(columns[moves[0]-1 - (dice.d1 + dice.d2)])
+            if dice.d1 > 0 and dice.d2 > 0 and 1 <= moves[0] - dice.d1 - dice.d2 and (curr_color == columns[moves[0] - (dice.d1 + dice.d2)].color or 0 <= columns[moves[0] - (dice.d1 + dice.d2)].size <= 1) and (d1ok or d2ok):
+                moves.append(columns[moves[0] - (dice.d1 + dice.d2)])
 
 def update_moves(dist):
-    distance = []
-    index = 0
     if not dice.doubles:
         if dist == dice.d1:
             dice.d1 = 0
@@ -311,15 +389,14 @@ def update_moves(dist):
         else: 
             dice.d1 = 0
 
-            
     print(dice.d1, dice.d2, dice.d3, dice.d4) #debug
-    legal_moves(moves[0])
+    legal_moves(-1)
 
 def show_moves():
     for j in moves[1:]:
         if 1<=j.number<=12:
             screen.blit(highlight_col_bot, (j.xpos, j.ypos))
-        else:
+        elif 13<=j.number<=24:
             screen.blit(highlight_col_top, (j.xpos, j.ypos))
 
 def turn_over():
@@ -368,22 +445,30 @@ def home_check():
 # columns array 
 bot_light_y = 415
 top_light_y = 60 
+
+
+
 columns = [
+    column(0, 485, 322),
     column(1, col1_x, bot_light_y), column(2, col1_x-(col_width+8.5), bot_light_y), column(3, col1_x-2*(col_width+8.5), bot_light_y), column(4, col1_x-3*(col_width+8.5), bot_light_y), column(5, col1_x-4*(col_width+8.5), bot_light_y), column(6, col1_x-5*(col_width+8.5), bot_light_y),
     column(7, col7_x, bot_light_y), column(8, col7_x-(col_width+8.5), bot_light_y), column(9, col7_x-2*(col_width+8.5), bot_light_y), column(10, col7_x-3*(col_width+8.5), bot_light_y), column(11, col7_x-4*(col_width+8.5), bot_light_y), column(12, col7_x-5*(col_width+8.5), bot_light_y),
     column(13, col7_x-5*(col_width+8.5), top_light_y), column(14, col7_x-4*(col_width+8.5), top_light_y), column(15, col7_x-3*(col_width+8.5), top_light_y), column(16, col7_x-2*(col_width+8.5), top_light_y), column(17, col7_x-(col_width+8.5), top_light_y), column(18, col7_x, top_light_y),
-    column(19, col1_x-5*(col_width+8.5), top_light_y), column(20, col1_x-4*(col_width+8.5), top_light_y), column(21, col1_x-3*(col_width+8.5), top_light_y), column(22, col1_x-2*(col_width+8.5), top_light_y), column(23, col1_x-(col_width+8.5), top_light_y), column(24, col1_x, top_light_y) 
+    column(19, col1_x-5*(col_width+8.5), top_light_y), column(20, col1_x-4*(col_width+8.5), top_light_y), column(21, col1_x-3*(col_width+8.5), top_light_y), column(22, col1_x-2*(col_width+8.5), top_light_y), column(23, col1_x-(col_width+8.5), top_light_y), column(24, col1_x, top_light_y),
+    column(25, 485, 398)
 ]
 
+columns[0].color = "white"
+columns[25].color = "black"
+
 # initialize columns with pucks
-columns[0].add_piece(whites[0]); columns[0].add_piece(whites[1])
-columns[5].add_piece(blacks[0]); columns[5].add_piece(blacks[1]); columns[5].add_piece(blacks[2]); columns[5].add_piece(blacks[3]); columns[5].add_piece(blacks[4])
-columns[7].add_piece(blacks[5]); columns[7].add_piece(blacks[6]); columns[7].add_piece(blacks[7])
-columns[11].add_piece(whites[2]); columns[11].add_piece(whites[3]); columns[11].add_piece(whites[4]); columns[11].add_piece(whites[5]); columns[11].add_piece(whites[6])
-columns[12].add_piece(blacks[8]); columns[12].add_piece(blacks[9]); columns[12].add_piece(blacks[10]); columns[12].add_piece(blacks[11]); columns[12].add_piece(blacks[12])
-columns[16].add_piece(whites[7]); columns[16].add_piece(whites[8]); columns[16].add_piece(whites[9])
-columns[18].add_piece(whites[10]); columns[18].add_piece(whites[11]); columns[18].add_piece(whites[12]); columns[18].add_piece(whites[13]); columns[18].add_piece(whites[14])
-columns[23].add_piece(blacks[13]); columns[23].add_piece(blacks[14])
+columns[1].add_piece(whites[0]); columns[1].add_piece(whites[1])
+columns[6].add_piece(blacks[0]); columns[6].add_piece(blacks[1]); columns[6].add_piece(blacks[2]); columns[6].add_piece(blacks[3]); columns[6].add_piece(blacks[4])
+columns[8].add_piece(blacks[5]); columns[8].add_piece(blacks[6]); columns[8].add_piece(blacks[7])
+columns[12].add_piece(whites[2]); columns[12].add_piece(whites[3]); columns[12].add_piece(whites[4]); columns[12].add_piece(whites[5]); columns[12].add_piece(whites[6])
+columns[13].add_piece(blacks[8]); columns[13].add_piece(blacks[9]); columns[13].add_piece(blacks[10]); columns[13].add_piece(blacks[11]); columns[13].add_piece(blacks[12])
+columns[17].add_piece(whites[7]); columns[17].add_piece(whites[8]); columns[17].add_piece(whites[9])
+columns[19].add_piece(whites[10]); columns[19].add_piece(whites[11]); columns[19].add_piece(whites[12]); columns[19].add_piece(whites[13]); columns[19].add_piece(whites[14])
+columns[24].add_piece(blacks[13]); columns[24].add_piece(blacks[14])
 
 # messages
 info = font.render("Playing: ", True, (0,255,255))
@@ -393,7 +478,6 @@ info = font.render("Playing: ", True, (0,255,255))
 #     print(i.x_coord, i.y_coord)
 # for i in blacks:
 #     print(i.x_coord, i.y_coord)
-
 
 while running:
 
@@ -419,7 +503,9 @@ while running:
             running = False
 
     out = font.render("playing: " + current_turn,True,(0,255,0), (150,150,150))
-    screen.blit(out, (500, 800))
+    rollinfo = font.render("d1: " + str(dice.d1) + "\nd2: " + str(dice.d2), True,(0,255,0))
+    screen.blit(out, (400, 800))
+    screen.blit(rollinfo, (600, 800))
 
     # set up pieces on board
     for i in whites:
@@ -440,17 +526,38 @@ while running:
                 roll(dice)
                 print(dice.d1, dice.d2, dice.d3, dice.d4) #debug
                 moves.clear
-                moves.append(0)
+                moves.append(-1)
         else:
             screen.blit(roll_button, (bxpos, bypos))
 
     # a player is playing
     else:
+        # in case current player has hit pucks
+        if (columns[0].size > 0 and current_turn == "white") or (columns[25].size > 0 and current_turn == "black"):
+            if current_turn == "white":
+                active_col = 0
+            else:
+                active_col = 25
+            show_moves_flag = True
+            legal_moves(active_col)
+            if show_moves_flag and len(moves) > 1:
+                            # moved = False
+                            # listen for mouse click to place hit puck
+                            if event.type == pg.MOUSEBUTTONDOWN:# and not show_moves_flag:
+                                pg.time.wait(100)
+                                for j in moves[1:]:
+                                    if j.xpos <= mouse[0] <= j.xpos + col_width and j.ypos <= mouse[1] <= j.ypos + col_height:
+                                        move(columns[moves[0]], columns[j.number])
+                                        update_moves(abs(moves[0]-j.number))
+                                        show_moves_flag = False
+                                        active_col = -1
+
         # listen for mouse click on column to show available moves
-        if event.type == pg.MOUSEBUTTONDOWN:# and not show_moves_flag:
+        elif event.type == pg.MOUSEBUTTONDOWN:# and not show_moves_flag:
             pg.time.wait(100)
             for i in columns:
-                if (i.xpos <= mouse[0] <= i.xpos+col_width) and (i.ypos <= mouse[1] <= i.ypos+col_height):
+                # check mouse in columns
+                if (i.xpos <= mouse[0] <= i.xpos+col_width) and (i.ypos <= mouse[1] <= i.ypos+col_height):# or (white_mid.xpos <= mouse[0] <= white_mid.xpos+col_width) and (white_mid.ypos <= mouse[1] <= white_mid.ypos+col_height) or (black_mid.xpos <= mouse[0] <= black_mid.xpos+col_width) and (black_mid.ypos <= mouse[1] <= black_mid.ypos+col_height):
                     active_col = i.number 
 
                     if show_moves_flag and active_col == moves[0]:
@@ -460,24 +567,41 @@ while running:
                     else:                        
                         # check if player clicked a valid move fromm the moves list
                         if show_moves_flag and len(moves) > 1:
+                            # moved = False
                             for j in moves[1:]:
                                 if j.xpos <= mouse[0] <= j.xpos + col_width and j.ypos <= mouse[1] <= j.ypos + col_height:
-                                    move(columns[moves[0]-1], columns[j.number-1])
-                                    print(abs(moves[0]-j.number))
+                                    move(columns[moves[0]], columns[j.number])
                                     update_moves(abs(moves[0]-j.number))
-                                    
-                        legal_moves(active_col)            
+                                    # moved = True
+                                    show_moves_flag = False
+                         
+                        # if not moved:            
+                        #     legal_moves(active_col) 
+                        #     # active_col = None # might break game           
+                        #     show_moves_flag = True
+                        # else: 
+                        #     moved = False
+                        legal_moves(active_col) 
                         show_moves_flag = True
 
         if show_moves_flag and not turn_over():
-            show_moves()    
+            show_moves()
+            columns[active_col].highlight_puck()
+            # if active_col > 24:
+            #     columns[active_col].highlight_puck()
+            # else:    
+            #     columns[active_col-1].highlight_puck()
+        elif not show_moves_flag:
+            unhilight_pucks("all") 
         # change player turn
         if turn_over() and current_turn == "white":
             current_turn = "black"
-            print("turn over")
+            unhilight_pucks("all")
+            show_moves_flag = False
         elif turn_over() and current_turn == "black":
             current_turn = "white"
-            print("turn over")
+            unhilight_pucks("all")
+            show_moves_flag = False
 
 
 
