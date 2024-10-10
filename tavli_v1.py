@@ -17,6 +17,8 @@ my_color = (71, 40, 21)
 
 # placement variables
 puck_size = 56
+puck_w = 50
+puck_h = 20
 col1_x = 868
 col7_x = 423
 low_y = 686
@@ -35,6 +37,7 @@ bypos = 780 # = Black Y Position
 
 # various flags and vars
 running = True
+rolled = False
 current_turn = None # specifies current turn as "white" or "black"
 end_of_turn = True  # flag to signify end of turn
 show_moves_flag = False # flag to turn on or off available moves indicator
@@ -43,18 +46,21 @@ active_col = None   # variable specifying selected column
 active_puck = None  # variable specifying selected puck
 home_white = False  # flag checking if whites can be collected
 home_black = False  # flag checking if blacks can be collected
-collected_white = 0 # counter for collected white pucks
-collected_black = 0 # counter for collected black pucks
+# collected_white = 0 # counter for collected white pucks
+# collected_black = 0 # counter for collected black pucks
 
 # images
 roll_button = pg.image.load("img/roll_b_inactive.png")
 active_roll_button = pg.image.load("img/roll_b_active.png")
 w_puck = pg.image.load("img/white_puck.png")
 b_puck = pg.image.load("img/black_puck.png")
+w_coll = pg.image.load("img/white_side.png")
+b_coll = pg.image.load("img/black_side.png")
 selected_white_puck = pg.image.load("img/white_highlight.png")
 selected_black_puck = pg.image.load("img/black_highlight.png")
 highlight_col_bot = pg.image.load("img/col_light_bot.png")
 highlight_col_top = pg.image.load("img/col_light_top.png")
+highlight_tower = pg.image.load("img/image1-3.png")
 
 # dice
 class Dice:
@@ -128,6 +134,8 @@ class puck:
             self.image = b_puck
 
     def get_coords(self, col, sz):    
+        if sz >= 5:
+            sz = sz - 4.5
         # get y
         if 1 <= col <= 12 or col == 25:
             self.y_coord = low_y - sz * puck_size
@@ -150,6 +158,14 @@ class puck:
             else:
                 self.x_coord = col7_x - (18-col) * col_dist
         # print(col, self.color, self.x_coord, self.y_coord) #debug
+
+    def get_t_coords(self, sz):
+        if self.number == 30: # black
+            self.x_coord = black_tower.xpos
+            self.y_coord = black_tower.ypos - sz * puck_h
+        else:
+            self.x_coord = white_tower.xpos
+            self.y_coord = 35 + sz * puck_h
 
 # array of white pucks
 whites = [
@@ -179,7 +195,7 @@ class column:
         if len(self.pucks) > 0:
             self.size -= 1
             if self.size == 0:
-                self.color == None
+                self.color = None
             return self.pucks.pop()
 
     def add_piece(self, piece_to_add): #pushing
@@ -187,6 +203,11 @@ class column:
         self.pucks.append(piece_to_add)
         # call to get the new coordinates of the puck
         piece_to_add.get_coords(self.number, self.size)
+        self.size += 1
+
+    def add_tower(self, add):
+        self.pucks.append(add)
+        add.get_t_coords(self.size)
         self.size += 1
 
     def highlight_puck(self):
@@ -217,8 +238,19 @@ def unhilight_pucks(color):
 def move(FROM, TO):
     pg.mixer.Sound.play(move_sound)
     pg.mixer.Sound.play(move_sound)
+    # check if puck is collected
+    if TO.number == 30 or TO.number == 60:
+        if TO.number == 30:
+            to_add = puck("black")
+            to_add.image = b_coll
+        else:
+            to_add = puck("white")
+            to_add.image = w_coll
+        FROM.remove_piece()
+        TO.add_tower(to_add)
     # check if a puck is hit
-    if TO.color != None and TO.color != FROM.color:
+    # if TO.color != None and TO.color != FROM.color:
+    if TO.color != current_turn and TO.size == 1:
         # move to corresponding middle
         if current_turn == "white":
             move(TO, columns[25])
@@ -239,9 +271,10 @@ def legal_moves(col):
     # moves.append(col)
     if col == -1:
         moves.append(-10)
-    elif not turn_over():
+    else:
         # moves[0] stores number of active column
         moves.append(col)
+        home_check()
         if current_turn == "white" and columns[0].size == 0:
             legal_moves_white()
         elif current_turn == "black" and columns[25].size == 0:
@@ -288,9 +321,20 @@ def seat_black():
             dice.d1 = dice.d2 = dice.d3 = dice.d4 = 0
 
 def legal_moves_white():
+    global home_white
     # color of curernt column 
     curr_color = columns[moves[0]].color
     if curr_color == "white" and dice.d1+dice.d2+dice.d3+dice.d4 > 0:
+        # check if pucks can be collected
+        if home_white:
+            if dice.d1 == columns[moves[0]].number:
+                moves.append(white_tower)
+            if dice.d2 == columns[moves[0]].number:
+                moves.append(white_tower)
+            if dice.d3 == columns[moves[0]].number:
+                moves.append(white_tower)
+            if dice.d4 == columns[moves[0]].number:
+                moves.append(white_tower)
         # for doubles
         if dice.doubles:
             if moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0] + dice.d1].color or 0 <= columns[moves[0] + dice.d1].size <= 1):
@@ -323,9 +367,20 @@ def legal_moves_white():
                 moves.append(columns[moves[0] + dice.d1 + dice.d2])
         
 def legal_moves_black():
+    global home_black
     # color of curernt column 
     curr_color = columns[moves[0]].color
     if curr_color == "black" and dice.d1+dice.d2+dice.d3+dice.d4 > 0:
+        # check if pucks can be collected
+        if home_black:
+            if 25-dice.d1 == columns[moves[0]].number:
+                moves.append(black_tower)
+            if 25-dice.d2 == columns[moves[0]].number:
+                moves.append(black_tower)
+            if 25-dice.d3 == columns[moves[0]].number:
+                moves.append(black_tower)
+            if 25-dice.d4 == columns[moves[0]].number:
+                moves.append(black_tower)
         # for doubles
         if dice.doubles:
             if 1 <= moves[0] - dice.d1 and (curr_color == columns[moves[0] - dice.d1].color or 0 <= columns[moves[0] - dice.d1].size <= 1):
@@ -398,55 +453,84 @@ def show_moves():
             screen.blit(highlight_col_bot, (j.xpos, j.ypos))
         elif 13<=j.number<=24:
             screen.blit(highlight_col_top, (j.xpos, j.ypos))
+        elif j.number == 30 or j.number == 60:
+            screen.blit(highlight_tower, (j.xpos, j.ypos))
 
 def turn_over():
     if dice.d1 == dice.d2 == dice.d3 == dice.d4 == 0:
         return True
     else:
-        return False
+        for i in columns[1:25]:
+            if current_turn == "white":
+                if i.color == current_turn and i.size > 0:
+                    if dice.d1 != 0 and 1 <= i.number + dice.d1 <= 24  and (columns[i.number+dice.d1].color == current_turn or columns[i.number+dice.d1].size <= 1):
+                        return False
+                    elif dice.d2 != 0 and 1 <= i.number + dice.d2 <= 24 and (columns[i.number+dice.d2].color == current_turn or columns[i.number+dice.d2].size <= 1):
+                        return False
+                    elif dice.d3 != 0 and 1 <= i.number + dice.d3 <= 24 and (columns[i.number+dice.d3].color == current_turn or columns[i.number+dice.d3].size <= 1):
+                        return False
+                    elif dice.d4 != 0 and 1 <= i.number + dice.d4 <= 24 and (columns[i.number+dice.d4].color == current_turn or columns[i.number+dice.d4].size <= 1):
+                        return False
+            else:
+                if i.color == current_turn and i.size > 0:
+                        if dice.d1 != 0 and 1 <= i.number - dice.d1 <= 24  and (columns[i.number+dice.d1].color == current_turn or columns[i.number+dice.d1].size <= 1):
+                            return False
+                        elif dice.d2 != 0 and 1 <= i.number - dice.d2 <= 24 and (columns[i.number+dice.d2].color == current_turn or columns[i.number+dice.d2].size <= 1):
+                            return False
+                        elif dice.d3 != 0 and 1 <= i.number - dice.d3 <= 24 and (columns[i.number+dice.d3].color == current_turn or columns[i.number+dice.d3].size <= 1):
+                            return False
+                        elif dice.d4 != 0 and 1 <= i.number - dice.d4 <= 24 and (columns[i.number+dice.d4].color == current_turn or columns[i.number+dice.d4].size <= 1):
+                            return False
+    return True
 
 def home_check():
     sum_w = sum_b = 0
+    global home_white, home_black
+    # home is 1:6 and 19:24
     if gamemode == None or gamemode == 1:
         # check whites
-        for w in columns[17:]: # get columns 17-23
+        for w in columns[19:25]: # get columns 19-24
             if w.color == "white":
                 sum_w += w.size
-        if sum_w + collected_white == 15:
+        if sum_w + white_tower.size == 15:
             home_white = True
         else: 
             home_white = False
         # check blacks
-        for b in columns[:6]: # get columns 0-5
+        for b in columns[1:7]: # get columns 1-6
             if b.color == "black":
-                sum_w += b.size
-        if sum_b + collected_black == 15:
+                sum_b += b.size
+        if sum_b + black_tower.size == 15:
             home_black = True
         else: 
             home_black = False
+    # home is 1:8 and 17:24
     else:
         # check whites
-        for w in columns[15:]: # get columns 15-23
+        for w in columns[17:25]: # get columns 17-24
             if w.color == "white":
                 sum_w += w.size
-        if sum_w + collected_white == 15:
+        if sum_w + white_tower.size == 15:
             home_white = True
         else: 
             home_white = False
         # check blacks
-        for b in columns[:8]: # get columns 0-7
+        for b in columns[1:9]: # get columns 1-8
             if b.color == "black":
-                sum_w += b.size
-        if sum_b + collected_black == 15:
+                sum_b += b.size
+        if sum_b + black_tower.size == 15:
             home_black = True
         else: 
             home_black = False
+
+def game_over():
+    if black_tower.size == 15 or white_tower.size == 15:
+        return True
+    return False
 
 # columns array 
 bot_light_y = 415
 top_light_y = 60 
-
-
 
 columns = [
     column(0, 485, 322),
@@ -457,8 +541,11 @@ columns = [
     column(25, 485, 398)
 ]
 
-columns[0].color = "white"
-columns[25].color = "black"
+white_tower = column(60,958,29)
+black_tower = column(30,958,424)
+
+columns[0].color = white_tower.color = "white"
+columns[25].color = black_tower.color = "black"
 
 # initialize columns with pucks
 columns[1].add_piece(whites[0]); columns[1].add_piece(whites[1])
@@ -517,13 +604,15 @@ while running:
 
     # if end_of_turn == True:
     if turn_over():
+        # rolled = False
         # change roll button on hover
         if (bxpos <= mouse[0] <= bxpos + bwidth) and (bypos <= mouse[1] <= bypos + bheight):
             screen.blit(active_roll_button, (bxpos,bypos))
-            # roll on clikc and start new turn
+            # roll on click and start new turn
             if click[0] == 1:
                 # end_of_turn = False
                 roll(dice)
+                # rolled = True
                 print(dice.d1, dice.d2, dice.d3, dice.d4) #debug
                 moves.clear
                 moves.append(-1)
@@ -594,15 +683,17 @@ while running:
         elif not show_moves_flag:
             unhilight_pucks("all") 
         # change player turn
-        if turn_over() and current_turn == "white":
-            current_turn = "black"
-            unhilight_pucks("all")
-            show_moves_flag = False
-        elif turn_over() and current_turn == "black":
-            current_turn = "white"
-            unhilight_pucks("all")
-            show_moves_flag = False
-
+        if not game_over():
+            if turn_over() and current_turn == "white":
+                current_turn = "black"
+                unhilight_pucks("all")
+                show_moves_flag = False
+            elif turn_over() and current_turn == "black":
+                current_turn = "white"
+                unhilight_pucks("all")
+                show_moves_flag = False
+        else:
+            screen.blit(font.render(current_turn + "wins", True,(0,255,0)), (250, 830))
 
 
 
