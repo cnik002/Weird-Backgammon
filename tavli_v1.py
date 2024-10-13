@@ -159,13 +159,13 @@ class puck:
                 self.x_coord = col7_x - (18-col) * col_dist
         # print(col, self.color, self.x_coord, self.y_coord) #debug
 
-    def get_t_coords(self, sz):
-        if self.number == 30: # black
-            self.x_coord = black_tower.xpos
-            self.y_coord = black_tower.ypos - sz * puck_h
+    def get_t_coords(self, color, sz):
+        if color == "black": 
+            self.x_coord = black_tower.xpos - 2
+            self.y_coord = black_tower.ypos + col_height - sz * puck_h
         else:
-            self.x_coord = white_tower.xpos
-            self.y_coord = 35 + sz * puck_h
+            self.x_coord = white_tower.xpos - 2
+            self.y_coord = 35 - sz * puck_h
 
 # array of white pucks
 whites = [
@@ -180,6 +180,8 @@ blacks = [
     puck("black"), puck("black"), puck("black"), puck("black"), puck("black"), 
     puck("black"), puck("black"), puck("black"), puck("black"), puck("black")
 ]
+
+collected = []
 
 # for column stack class
 class column:
@@ -207,7 +209,7 @@ class column:
 
     def add_tower(self, add):
         self.pucks.append(add)
-        add.get_t_coords(self.size)
+        add.get_t_coords(self.color, self.size)
         self.size += 1
 
     def highlight_puck(self):
@@ -243,23 +245,26 @@ def move(FROM, TO):
         if TO.number == 30:
             to_add = puck("black")
             to_add.image = b_coll
+            blacks.remove(FROM.remove_piece()) 
         else:
             to_add = puck("white")
             to_add.image = w_coll
-        FROM.remove_piece()
+            whites.remove(FROM.remove_piece()) 
+        collected.append(to_add) 
         TO.add_tower(to_add)
-    # check if a puck is hit
-    # if TO.color != None and TO.color != FROM.color:
-    if TO.color != current_turn and TO.size == 1:
-        # move to corresponding middle
-        if current_turn == "white":
-            move(TO, columns[25])
-        else:
-            move(TO, columns[0])
-    # perform original move
-    # tmp = FROM.remove_piece()
-    # TO.add_piece(tmp)
-    TO.add_piece(FROM.remove_piece())
+    else:    
+        # check if a puck is hit
+        # if TO.color != None and TO.color != FROM.color:
+        if TO.color != current_turn and TO.size == 1:
+            # move to corresponding middle
+            if current_turn == "white":
+                move(TO, columns[25])
+            else:
+                move(TO, columns[0])
+        # perform original move
+        # tmp = FROM.remove_piece()
+        # TO.add_piece(tmp)
+        TO.add_piece(FROM.remove_piece())
 
 d1ok = False
 d2ok = False
@@ -327,14 +332,14 @@ def legal_moves_white():
     if curr_color == "white" and dice.d1+dice.d2+dice.d3+dice.d4 > 0:
         # check if pucks can be collected
         if home_white:
-            if dice.d1 == columns[moves[0]].number:
+            if 25-dice.d1 == columns[moves[0]].number:
                 moves.append(white_tower)
-            if dice.d2 == columns[moves[0]].number:
+            if 25-dice.d2 == columns[moves[0]].number:
                 moves.append(white_tower)
-            if dice.d3 == columns[moves[0]].number:
+            if 25-dice.d3 == columns[moves[0]].number:
                 moves.append(white_tower)
             if dice.d4 == columns[moves[0]].number:
-                moves.append(white_tower)
+                25-moves.append(white_tower)
         # for doubles
         if dice.doubles:
             if moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0] + dice.d1].color or 0 <= columns[moves[0] + dice.d1].size <= 1):
@@ -373,13 +378,13 @@ def legal_moves_black():
     if curr_color == "black" and dice.d1+dice.d2+dice.d3+dice.d4 > 0:
         # check if pucks can be collected
         if home_black:
-            if 25-dice.d1 == columns[moves[0]].number:
+            if dice.d1 == columns[moves[0]].number:
                 moves.append(black_tower)
-            if 25-dice.d2 == columns[moves[0]].number:
+            if dice.d2 == columns[moves[0]].number:
                 moves.append(black_tower)
-            if 25-dice.d3 == columns[moves[0]].number:
+            if dice.d3 == columns[moves[0]].number:
                 moves.append(black_tower)
-            if 25-dice.d4 == columns[moves[0]].number:
+            if dice.d4 == columns[moves[0]].number:
                 moves.append(black_tower)
         # for doubles
         if dice.doubles:
@@ -455,6 +460,9 @@ def show_moves():
             screen.blit(highlight_col_top, (j.xpos, j.ypos))
         elif j.number == 30 or j.number == 60:
             screen.blit(highlight_tower, (j.xpos, j.ypos))
+    # debug
+    # for i in moves[1:]:
+    #     print(i.number)
 
 def turn_over():
     if dice.d1 == dice.d2 == dice.d3 == dice.d4 == 0:
@@ -462,7 +470,8 @@ def turn_over():
     else:
         for i in columns[1:25]:
             if current_turn == "white":
-                if i.color == current_turn and i.size > 0:
+                if i.color == current_turn:# and i.size > 0:
+                    # checks if target is in legal range and if its free
                     if dice.d1 != 0 and 1 <= i.number + dice.d1 <= 24  and (columns[i.number+dice.d1].color == current_turn or columns[i.number+dice.d1].size <= 1):
                         return False
                     elif dice.d2 != 0 and 1 <= i.number + dice.d2 <= 24 and (columns[i.number+dice.d2].color == current_turn or columns[i.number+dice.d2].size <= 1):
@@ -472,14 +481,14 @@ def turn_over():
                     elif dice.d4 != 0 and 1 <= i.number + dice.d4 <= 24 and (columns[i.number+dice.d4].color == current_turn or columns[i.number+dice.d4].size <= 1):
                         return False
             else:
-                if i.color == current_turn and i.size > 0:
-                        if dice.d1 != 0 and 1 <= i.number - dice.d1 <= 24  and (columns[i.number+dice.d1].color == current_turn or columns[i.number+dice.d1].size <= 1):
+                if i.color == current_turn:# and i.size > 0:
+                        if dice.d1 != 0 and 1 <= i.number - dice.d1 <= 24  and (columns[i.number-dice.d1].color == current_turn or columns[i.number-dice.d1].size <= 1):
                             return False
-                        elif dice.d2 != 0 and 1 <= i.number - dice.d2 <= 24 and (columns[i.number+dice.d2].color == current_turn or columns[i.number+dice.d2].size <= 1):
+                        elif dice.d2 != 0 and 1 <= i.number - dice.d2 <= 24 and (columns[i.number-dice.d2].color == current_turn or columns[i.number-dice.d2].size <= 1):
                             return False
-                        elif dice.d3 != 0 and 1 <= i.number - dice.d3 <= 24 and (columns[i.number+dice.d3].color == current_turn or columns[i.number+dice.d3].size <= 1):
+                        elif dice.d3 != 0 and 1 <= i.number - dice.d3 <= 24 and (columns[i.number-dice.d3].color == current_turn or columns[i.number-dice.d3].size <= 1):
                             return False
-                        elif dice.d4 != 0 and 1 <= i.number - dice.d4 <= 24 and (columns[i.number+dice.d4].color == current_turn or columns[i.number+dice.d4].size <= 1):
+                        elif dice.d4 != 0 and 1 <= i.number - dice.d4 <= 24 and (columns[i.number-dice.d4].color == current_turn or columns[i.number-dice.d4].size <= 1):
                             return False
     return True
 
@@ -599,6 +608,8 @@ while running:
         screen.blit(i.image, (i.x_coord, i.y_coord))
     for i in blacks:
         screen.blit(i.image, (i.x_coord, i.y_coord))
+    for i in collected:
+        screen.blit(i.image, (i.x_coord, i.y_coord))
 
     # screen.blit(roll_button, (bxpos,bypos))
 
@@ -646,7 +657,7 @@ while running:
             pg.time.wait(100)
             for i in columns:
                 # check mouse in columns
-                if (i.xpos <= mouse[0] <= i.xpos+col_width) and (i.ypos <= mouse[1] <= i.ypos+col_height):# or (white_mid.xpos <= mouse[0] <= white_mid.xpos+col_width) and (white_mid.ypos <= mouse[1] <= white_mid.ypos+col_height) or (black_mid.xpos <= mouse[0] <= black_mid.xpos+col_width) and (black_mid.ypos <= mouse[1] <= black_mid.ypos+col_height):
+                if (i.xpos <= mouse[0] <= i.xpos+col_width) and (i.ypos <= mouse[1] <= i.ypos+col_height) or ((white_tower.xpos <= mouse[0] <= white_tower.xpos+col_width) and (white_tower.ypos <= mouse[1] <= white_tower.ypos+col_height)) or ((black_tower.xpos <= mouse[0] <= black_tower.xpos+col_width) and (black_tower.ypos <= mouse[1] <= black_tower.ypos+col_height)):
                     active_col = i.number 
 
                     if show_moves_flag and active_col == moves[0]:
@@ -654,13 +665,24 @@ while running:
                     elif not show_moves_flag and active_col == moves[0]:
                         show_moves_flag = True
                     else:                        
-                        # check if player clicked a valid move fromm the moves list
+                        # check if player clicked a valid move from the moves list
                         if show_moves_flag and len(moves) > 1:
                             # moved = False
                             for j in moves[1:]:
+                                # if j.number == 60: print("YES!!!") #debug
                                 if j.xpos <= mouse[0] <= j.xpos + col_width and j.ypos <= mouse[1] <= j.ypos + col_height:
-                                    move(columns[moves[0]], columns[j.number])
-                                    update_moves(abs(moves[0]-j.number))
+                                    # print(j.number) #debug
+                                    if j.number == 30:
+                                        move(columns[moves[0]], black_tower)
+                                        update_moves(moves[0])
+                                        active_col = 25-(25-moves[0])
+                                    elif j.number == 60:
+                                        move(columns[moves[0]], white_tower)
+                                        update_moves(25-moves[0])
+                                        active_col = 25-(25-moves[0])
+                                    else:
+                                        move(columns[moves[0]], columns[j.number])
+                                        update_moves(abs(moves[0]-j.number))
                                     # moved = True
                                     show_moves_flag = False
                          
@@ -672,6 +694,8 @@ while running:
                         #     moved = False
                         legal_moves(active_col) 
                         show_moves_flag = True
+
+        # print(mouse[0], mouse[1], white_tower.xpos, white_tower.xpos+col_width, white_tower.ypos, white_tower.ypos+col_height) #debug
 
         if show_moves_flag and not turn_over():
             show_moves()
