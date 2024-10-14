@@ -124,9 +124,10 @@ def roll(dice):
 
 # id = color, coordinates for placement purposes
 class puck:
-    def __init__(self, color):
+    def __init__(self, color, id):
         self.color = color
         self.hit = False
+        self.id = id
         # get image
         if self.color == "white":
             self.image = w_puck
@@ -162,23 +163,23 @@ class puck:
     def get_t_coords(self, color, sz):
         if color == "black": 
             self.x_coord = black_tower.xpos - 2
-            self.y_coord = black_tower.ypos + col_height - sz * puck_h
+            self.y_coord = black_tower.ypos + 50 + col_height - sz * puck_h
         else:
             self.x_coord = white_tower.xpos - 2
-            self.y_coord = 35 - sz * puck_h
+            self.y_coord = 35 + sz * puck_h
 
 # array of white pucks
 whites = [
-    puck("white"), puck("white"), puck("white"), puck("white"), puck("white"), 
-    puck("white"), puck("white"), puck("white"), puck("white"), puck("white"), 
-    puck("white"), puck("white"), puck("white"), puck("white"), puck("white")
+    puck("white",0), puck("white",1), puck("white",2), puck("white",3), puck("white",4), 
+    puck("white",5), puck("white",6), puck("white",7), puck("white",8), puck("white",9), 
+    puck("white",10), puck("white",11), puck("white",12), puck("white",13), puck("white",14)
 ]
 
 # array of black pucks
 blacks = [
-    puck("black"), puck("black"), puck("black"), puck("black"), puck("black"), 
-    puck("black"), puck("black"), puck("black"), puck("black"), puck("black"), 
-    puck("black"), puck("black"), puck("black"), puck("black"), puck("black")
+    puck("black",0), puck("black",1), puck("black",2), puck("black",3), puck("black",4), 
+    puck("black",5), puck("black",6), puck("black",7), puck("black",8), puck("black",9), 
+    puck("black",10), puck("black",11), puck("black",12), puck("black",13), puck("black",14)
 ]
 
 collected = []
@@ -209,7 +210,7 @@ class column:
 
     def add_tower(self, add):
         self.pucks.append(add)
-        add.get_t_coords(self.color, self.size)
+        add.get_t_coords(add.color, self.size)
         self.size += 1
 
     def highlight_puck(self):
@@ -236,34 +237,109 @@ def unhilight_pucks(color):
         for b in blacks:
             b.image = b_puck
 
+# check if a move is legal
+def is_legal(FROM,TO):
+    if FROM.color == TO.color or 0 <= TO.size <= 1:
+        return True
+    return False
+
+# check and automate hit puck in case player moves to the sum of dice
+# in game description, write that the game tries to play the smallest die first
+def split_dice(FROM, TO):
+    dist = abs(FROM.number-TO.number)
+    # separate moves
+    # if dist > dice.d1 and dist > dice.d2:
+    if dice.d1 <= dice.d2:
+        move1 = dice.d1
+        move2 = dist - dice.d1
+    else:
+        move1 = dice.d2
+        move2 = dist - dice.d2  
+    # print(dist, " split in: ", move1, " ", move2) #debug
+
+    # for whites, try to do small move first
+    if current_turn == "white" and is_legal(FROM,columns[FROM.number + move1]):
+        # if is_legal(FROM,columns[FROM.number + move1]):
+        # print("do move 1: ", FROM.number, FROM.number + move1) #debug
+        move(FROM, columns[FROM.number + move1])
+        # print("do move 2:", FROM.number + move1, FROM.number + move1 + move2) #debug
+        move(columns[FROM.number + move1], columns[FROM.number + move1 + move2])
+    elif current_turn == "white" and is_legal(FROM,columns[FROM.number + move2]):
+        # print("do move 2: ", FROM.number, FROM.number + move2) #debug
+        move(FROM, columns[FROM.number + move2])
+        # print("do move 1:", FROM.number + move2, FROM.number + move2 + move1) #debug
+        move(columns[FROM.number + move2], columns[FROM.number + move2 + move1])
+
+    # for blacks, try to do small move first
+    elif current_turn == "black" and is_legal(FROM,columns[FROM.number - move1]): 
+        if is_legal(FROM,columns[FROM.number - move1]):
+            # print("do move 1: ", FROM.number, FROM.number - move1) #debug
+            move(FROM, columns[FROM.number - move1])
+            # print("do move 2:", FROM.number - move1, FROM.number - move1 - move2) #debug
+            move(columns[FROM.number - move1], columns[FROM.number - move1 - move2])
+    elif current_turn == "black" and is_legal(FROM,columns[FROM.number - move2]):
+        # print("do move 2: ", FROM.number, FROM.number - move2) #debug
+        move(FROM, columns[FROM.number - move2])
+        # print("do move 1:", FROM.number - move2, FROM.number - move2 - move1) #debug
+        move(columns[FROM.number - move2], columns[FROM.number - move2 - move1])
+
+    # # d1 > d2
+    # elif dist > dice.d1 and dist > dice.d2 and dice.d1 > dice.d2:
+    #     move1 = dice.d2
+    #     move2 = dist - dice.d2  
+    #     print(dist, " split in: ", move1, " ", move2)
+    #     if current_turn == "white":
+    #         if is_legal(FROM,columns[FROM.number + move1]):
+    #             print("do move 1: ", FROM.number, FROM.number + move1) #debug
+    #             move(FROM, columns[FROM.number + move1])
+    #             print("do move 2:", FROM.number + move1, FROM.number + move1 + move2) #debug
+    #             move(columns[FROM.number + move1], columns[FROM.number + move1 + move2])
+    #     else: 
+    #         if is_legal(FROM,columns[FROM.number - move1]):
+    #             print("do move 1: ", FROM.number, FROM.number - move1) #debug
+    #             move(FROM, columns[FROM.number - move1])
+    #             print("do move 2:", FROM.number - move1, FROM.number - move1 - move2) #debug
+    #             move(columns[FROM.number - move1], columns[FROM.number - move1 - move2])
+
 # to move piece (from and to refer to columns)
 def move(FROM, TO):
+    # global w_coll, b_coll, whites, blacks ,collected
+    dist = abs(FROM.number-TO.number)
+    # if move is bigger than a single die + puck is not hit or collected
+    if (dist > dice.d1 and dist > dice.d2) and (0 < TO.number < 25):
+        split_dice(FROM, TO)
+        return
     pg.mixer.Sound.play(move_sound)
     pg.mixer.Sound.play(move_sound)
     # check if puck is collected
     if TO.number == 30 or TO.number == 60:
-        if TO.number == 30:
-            to_add = puck("black")
+        print("FROM - TO: " , FROM.number, TO.number)
+        if TO.number == 30: # collect black
+            to_add = FROM.remove_piece()
             to_add.image = b_coll
-            blacks.remove(FROM.remove_piece()) 
-        else:
-            to_add = puck("white")
-            to_add.image = w_coll
-            whites.remove(FROM.remove_piece()) 
-        collected.append(to_add) 
+            # del blacks[to_add.id]
+        else: # collect white
+            # to_add = puck("white", None)
+            # to_add.image = w_coll
+            # del whites[FROM.remove_piece().id]
+            # print("whites left: ", len(whites)) 
+            to_add = FROM.remove_piece()
+            print(whites[to_add.id].image)
+            whites[to_add.id].image = w_coll
+            print(to_add.image)
+        # put in list to be shown
+        # collected.append(to_add) # maybe uncomment
         TO.add_tower(to_add)
     else:    
         # check if a puck is hit
-        # if TO.color != None and TO.color != FROM.color:
-        if TO.color != current_turn and TO.size == 1:
+        if TO.color != current_turn and TO.size == 1 and (0 < TO.number < 25):
             # move to corresponding middle
             if current_turn == "white":
                 move(TO, columns[25])
             else:
                 move(TO, columns[0])
         # perform original move
-        # tmp = FROM.remove_piece()
-        # TO.add_piece(tmp)
+        # print("From: " ,FROM.number,"\tTO: " ,TO.number) #debug
         TO.add_piece(FROM.remove_piece())
 
 d1ok = False
@@ -338,8 +414,9 @@ def legal_moves_white():
                 moves.append(white_tower)
             if 25-dice.d3 == columns[moves[0]].number:
                 moves.append(white_tower)
-            if dice.d4 == columns[moves[0]].number:
-                25-moves.append(white_tower)
+            if 25-dice.d4 == columns[moves[0]].number:
+                moves.append(white_tower)
+            print("appended ", len(moves)-1)
         # for doubles
         if dice.doubles:
             if moves[0] + dice.d1 <= 24 and (curr_color == columns[moves[0] + dice.d1].color or 0 <= columns[moves[0] + dice.d1].size <= 1):
@@ -370,6 +447,10 @@ def legal_moves_white():
             # same for d1+d2
             if dice.d1 > 0 and dice.d2 > 0 and moves[0] + dice.d1 + dice.d2 <= 24 and (curr_color == columns[moves[0] + dice.d1 + dice.d2].color or 0 <= columns[moves[0] + dice.d1 + dice.d2].size <= 1) and (d1ok or d2ok):
                 moves.append(columns[moves[0] + dice.d1 + dice.d2])
+    # debug print
+    # for  m in moves[1:] :
+    #     if m.number == 60:
+    #         print("tower added")
         
 def legal_moves_black():
     global home_black
@@ -450,7 +531,8 @@ def update_moves(dist):
             dice.d1 = 0
 
     print(dice.d1, dice.d2, dice.d3, dice.d4) #debug
-    legal_moves(-1)
+    # legal_moves(-1)
+    legal_moves(active_col)
 
 def show_moves():
     for j in moves[1:]:
@@ -490,6 +572,7 @@ def turn_over():
                             return False
                         elif dice.d4 != 0 and 1 <= i.number - dice.d4 <= 24 and (columns[i.number-dice.d4].color == current_turn or columns[i.number-dice.d4].size <= 1):
                             return False
+    dice.d1 = dice.d2 = dice.d3 = dice.d4 = 0
     return True
 
 def home_check():
@@ -647,10 +730,10 @@ while running:
                                 pg.time.wait(100)
                                 for j in moves[1:]:
                                     if j.xpos <= mouse[0] <= j.xpos + col_width and j.ypos <= mouse[1] <= j.ypos + col_height:
-                                        move(columns[moves[0]], columns[j.number])
+                                        move(columns[moves[0]], columns[j.number]) # was move()
                                         update_moves(abs(moves[0]-j.number))
                                         show_moves_flag = False
-                                        active_col = -1
+                                        active_col = j.number # was -1 check
 
         # listen for mouse click on column to show available moves
         elif event.type == pg.MOUSEBUTTONDOWN:# and not show_moves_flag:
@@ -669,41 +752,41 @@ while running:
                         if show_moves_flag and len(moves) > 1:
                             # moved = False
                             for j in moves[1:]:
-                                # if j.number == 60: print("YES!!!") #debug
                                 if j.xpos <= mouse[0] <= j.xpos + col_width and j.ypos <= mouse[1] <= j.ypos + col_height:
                                     # print(j.number) #debug
-                                    if j.number == 30:
-                                        move(columns[moves[0]], black_tower)
+                                    if j.number == 30:# and not moved: # black
+                                        # j.number += 1
+                                        # print(j.number)
+                                        # moved = True
+                                        move(columns[moves[0]], black_tower) # was move()
                                         update_moves(moves[0])
-                                        active_col = 25-(25-moves[0])
-                                    elif j.number == 60:
-                                        move(columns[moves[0]], white_tower)
+                                        active_col = temp_col
+                                    elif j.number == 60:# and not moved: # white
+                                        # j.number += 1
+                                        # print(j.number)
+                                        # moved = True
+                                        move(columns[moves[0]], white_tower) # was move()
                                         update_moves(25-moves[0])
-                                        active_col = 25-(25-moves[0])
-                                    else:
-                                        move(columns[moves[0]], columns[j.number])
+                                        active_col = temp_col
+                                    elif j.number <= 25:
+                                        move(columns[moves[0]], columns[j.number]) # was move()
                                         update_moves(abs(moves[0]-j.number))
-                                    # moved = True
-                                    show_moves_flag = False
-                         
-                        # if not moved:            
-                        #     legal_moves(active_col) 
-                        #     # active_col = None # might break game           
-                        #     show_moves_flag = True
-                        # else: 
-                        #     moved = False
+                                        active_col = temp_col
+                                    # elif j.number == 31 or j.number == 61:
+                                    #     j.number -= 1
+                                        # moved = True
+                                    # show_moves_flag = False # was false
+                                    # moved = False
                         legal_moves(active_col) 
                         show_moves_flag = True
+                        temp_col = active_col
 
         # print(mouse[0], mouse[1], white_tower.xpos, white_tower.xpos+col_width, white_tower.ypos, white_tower.ypos+col_height) #debug
 
         if show_moves_flag and not turn_over():
             show_moves()
             columns[active_col].highlight_puck()
-            # if active_col > 24:
-            #     columns[active_col].highlight_puck()
-            # else:    
-            #     columns[active_col-1].highlight_puck()
+
         elif not show_moves_flag:
             unhilight_pucks("all") 
         # change player turn
